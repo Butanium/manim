@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import uuid
 from pathlib import Path
 from typing import Any, Self
 from xml.etree import ElementTree as ET
@@ -200,11 +201,12 @@ class SVGMobject(VMobject, metaclass=ConvertToOpenGL):
         element_tree = ET.parse(file_path)
         new_tree = self.modify_xml_tree(element_tree)  # type: ignore[arg-type]
         # Create a temporary svg file to dump modified svg to be parsed
-        modified_file_path = file_path.with_name(f"{file_path.stem}_{file_path.suffix}")
+        # Unique per process/call: parallel renders sharing a media dir used to race on one "<stem>_.svg".
+        modified_file_path = file_path.with_name(f"{file_path.stem}_{os.getpid()}_{uuid.uuid4().hex[:8]}{file_path.suffix}")
         new_tree.write(modified_file_path)
 
         svg = se.SVG.parse(modified_file_path)
-        modified_file_path.unlink()
+        modified_file_path.unlink(missing_ok=True)
 
         mobjects, mobject_dict = self.get_mobjects_from(svg)
         self.add(*mobjects)

@@ -56,7 +56,9 @@ __all__ = ["Text", "Paragraph", "MarkupText", "register_font"]
 
 import copy
 import hashlib
+import os
 import re
+import uuid
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from itertools import chain
@@ -537,8 +539,9 @@ class Text(SVGMobject):
             self.line_spacing = self._font_size + self._font_size * self.line_spacing
 
         parsed_color: ManimColor = ManimColor(color) if color else VMobject().color
+        # remove_last_M is applied inside _text2svg before the cache file is published; rewriting the
+        # shared cache file here raced with other processes reading it.
         file_name = self._text2svg(parsed_color.to_hex())
-        PangoUtils.remove_last_M(file_name)
         super().__init__(
             file_name,
             fill_opacity=fill_opacity,
@@ -851,18 +854,23 @@ class Text(SVGMobject):
             width = config["pixel_width"]
             height = config["pixel_height"]
 
-            svg_file = manimpango.text2svg(
+            # Write to a private temp file, then rename: parallel renders may read a half-written svg otherwise.
+            tmp_name = file_name.with_name(f"{hash_name}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp.svg")
+            manimpango.text2svg(
                 settings,
                 size,
                 line_spacing,
                 self.disable_ligatures,
-                str(file_name.resolve()),
+                str(tmp_name.resolve()),
                 START_X,
                 START_Y,
                 width,
                 height,
                 self.text,
             )
+            PangoUtils.remove_last_M(str(tmp_name))
+            os.replace(tmp_name, file_name)
+            svg_file = str(file_name.resolve())
 
         return svg_file
 
@@ -1248,9 +1256,7 @@ class MarkupText(SVGMobject):
             self.line_spacing = self._font_size + self._font_size * self.line_spacing
 
         parsed_color: ManimColor = ManimColor(color) if color else VMobject().color
-        file_name = self._text2svg(parsed_color)
-
-        PangoUtils.remove_last_M(file_name)
+        file_name = self._text2svg(parsed_color)  # remove_last_M applied inside, see Text.__init__
         super().__init__(
             file_name,
             fill_opacity=fill_opacity,
@@ -1401,7 +1407,8 @@ class MarkupText(SVGMobject):
                 else self.text
             )
             logger.debug(f"Setting Text {self.text}")
-            svg_file = MarkupUtils.text2svg(
+            tmp_name = file_name.with_name(f"{hash_name}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp.svg")
+            MarkupUtils.text2svg(
                 final_text,
                 self.font,
                 self.slant,
@@ -1409,7 +1416,7 @@ class MarkupText(SVGMobject):
                 size,
                 line_spacing,
                 self.disable_ligatures,
-                str(file_name.resolve()),
+                str(tmp_name.resolve()),
                 START_X,
                 START_Y,
                 600,  # width
@@ -1417,6 +1424,9 @@ class MarkupText(SVGMobject):
                 justify=self.justify,
                 pango_width=500,
             )
+            PangoUtils.remove_last_M(str(tmp_name))
+            os.replace(tmp_name, file_name)
+            svg_file = str(file_name.resolve())
         return svg_file
 
     def _count_real_chars(self, s: str) -> int:
