@@ -336,6 +336,7 @@ class Manager(Generic[SceneT]):
             Additional arguments forwarded to
             :meth:`~manim.scene.scene_file_writer.SceneFileWriter.add_sound`.
         """
-        if self.skip_animations:
+        # A cache hit also sets skip_animations (until the next play); sounds must not be dropped for that.
+        if self.skip_animations and not getattr(self.renderer, "skipping_for_cache", False):
             return
         self.file_writer.add_sound(sound_file, self.time + time_offset, gain, **kwargs)

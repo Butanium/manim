@@ -53,6 +53,7 @@ class CairoRenderer:
         camera_cls = camera_class if camera_class is not None else Camera
         self.camera = camera_cls()
         self._original_skipping_status = skip_animations
+        self.skipping_for_cache = False
         self.skip_animations = skip_animations
         self.animations_hashes: list[str | None] = []
         self.num_plays = 0
@@ -76,6 +77,7 @@ class CairoRenderer:
         # Reset skip_animations to the original state.
         # Needed when rendering only some animations, and skipping others.
         self.skip_animations = self._original_skipping_status
+        self.skipping_for_cache = False
         self.update_skipping_status()
 
         scene.compile_animation_data(*args, **kwargs)
@@ -107,6 +109,9 @@ class CairoRenderer:
                         {"hash_current_animation": hash_current_animation},
                     )
                     self.skip_animations = True
+                    # Distinguishes "reusing a cached partial movie" from "the user asked to skip": the
+                    # flag stays set until the next play(), and sounds added meanwhile must still be kept.
+                    self.skipping_for_cache = True
                     self.time += scene.duration
         # adding None as a partial movie file will make file_writer ignore the latter.
         self.file_writer.add_partial_movie_file(hash_current_animation)
