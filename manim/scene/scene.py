@@ -559,16 +559,29 @@ class Scene:
         return self
 
     def add_mobjects_from_animations(self, animations: list[Animation]) -> None:
+        # Imported inside the method to avoid cyclic import.
+        from ..animation.composition import AnimationGroup
+
         curr_mobjects = self.get_mobject_family_members()
-        for animation in animations:
-            if animation.is_introducer():
-                continue
-            # Anything animated that's not already in the
-            # scene gets added to the scene
-            mob = animation.mobject
-            if mob is not None and mob not in curr_mobjects:
-                self.add(mob)
-                curr_mobjects += mob.get_family()  # type: ignore[arg-type]
+
+        def add_from(anims: Iterable[Animation]) -> None:
+            for animation in anims:
+                if animation.is_introducer():
+                    continue
+                # An AnimationGroup's mobject is a fresh Group wrapping its children's mobjects. Adding that
+                # Group to the scene drew those mobjects a second time, on top of everything and in animation
+                # order (e.g. a recoloured header strip covered its own label). Recurse into the children.
+                if isinstance(animation, AnimationGroup):
+                    add_from(animation.animations)
+                    continue
+                # Anything animated that's not already in the
+                # scene gets added to the scene
+                mob = animation.mobject
+                if mob is not None and mob not in curr_mobjects:
+                    self.add(mob)
+                    curr_mobjects.extend(mob.get_family())  # type: ignore[arg-type]
+
+        add_from(animations)
 
     def remove(self, *mobjects: Mobject) -> Self:
         """
