@@ -987,6 +987,12 @@ class Scene:
                 or any(consider_moving(m) for m in mob.submobjects)
             )
 
+        # An animated mobject that is not in the scene yet (e.g. an introducer nested in a Succession, added
+        # when its turn comes) can appear with any z_index, so nothing may be baked into the static frame.
+        in_scene = set(mobjects)
+        if any(m not in in_scene for m in animation_mobjects):
+            return list(mobjects)
+
         i = next((i for i, mob in enumerate(mobjects) if consider_moving(mob)), None)
         return [] if i is None else mobjects[i:]
 
