@@ -560,7 +560,11 @@ class Scene:
 
     def add_mobjects_from_animations(self, animations: list[Animation]) -> None:
         # Imported inside the method to avoid cyclic import.
-        from ..animation.composition import AnimationGroup
+        from ..animation.composition import AnimationGroup, LaggedStart, LaggedStartMap, Succession
+
+        # Only plain containers. Subclasses such as TransformMatchingTex add their own group and remove it
+        # in clean_up_from_scene, so they must keep the upstream behaviour.
+        plain_groups = (AnimationGroup, Succession, LaggedStart, LaggedStartMap)
 
         curr_mobjects = self.get_mobject_family_members()
 
@@ -571,7 +575,7 @@ class Scene:
                 # An AnimationGroup's mobject is a fresh Group wrapping its children's mobjects. Adding that
                 # Group to the scene drew those mobjects a second time, on top of everything and in animation
                 # order (e.g. a recoloured header strip covered its own label). Recurse into the children.
-                if isinstance(animation, AnimationGroup):
+                if type(animation) in plain_groups:
                     add_from(animation.animations)
                     continue
                 # Anything animated that's not already in the
